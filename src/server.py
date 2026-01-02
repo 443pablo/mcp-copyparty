@@ -277,9 +277,8 @@ def get_file_metadata(path: str) -> Dict[str, Any]:
     """
     # Request file listing with metadata by adding ?tags parameter
     # The parent directory is needed to get the file info from the listing
-    import os as os_module
-    dir_path = os_module.path.dirname(path) or "/"
-    filename = os_module.path.basename(path)
+    dir_path = os.path.dirname(path) or "/"
+    filename = os.path.basename(path)
     
     # Get directory listing with tags
     params = {"ls": "", "tags": ""}
