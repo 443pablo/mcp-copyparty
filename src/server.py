@@ -2,7 +2,8 @@
 import os
 import sys
 import base64
-from typing import Optional, Dict, Any
+import json
+from typing import Optional, Dict, Any, List
 from fastmcp import FastMCP
 import requests
 from urllib.parse import urljoin
@@ -238,30 +239,32 @@ def get_recent_uploads(filter_path: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
-@mcp.tool(description="Search for files on the copyparty server by listing directory contents and filtering. Useful for finding specific files or directories.")
-def search_files(path: str = "/", pattern: Optional[str] = None) -> Dict[str, Any]:
+@mcp.tool(description="Search for files on the copyparty server using server-wide search. Supports advanced search syntax including file content search, metadata queries, and more. Much more powerful than simple pattern matching.")
+def search_files(query: str, path: str = "/") -> Dict[str, Any]:
     """
-    Search for files matching a pattern in the given path.
+    Search for files server-wide using advanced search syntax.
     
     Args:
-        path: Directory path to search in
-        pattern: Optional pattern to filter files (substring match on filename)
+        query: Search query. Supports various operators:
+            - Simple text: searches filenames and content
+            - "quoted text": exact phrase match
+            - -word: exclude files containing word
+            - tag:value: search by metadata tag
+            - ext:mp3: search by file extension
+            - size>1M: files larger than 1MB
+            - date>2023-01-01: files modified after date
+        path: Optional path to limit search scope (default: "/")
     
     Returns:
-        Dictionary with matching files
+        Dictionary with search results
     """
-    params = {"ls": ""}
-    response = _make_request("GET", path, params=params)
-    data = response.json()
+    # Use JSON POST for server-wide search
+    search_data = {"q": query}
+    if path != "/":
+        search_data["v"] = path
     
-    if pattern and "files" in data:
-        # Filter files by pattern
-        filtered_files = [f for f in data["files"] if pattern.lower() in f["name"].lower()]
-        data["files"] = filtered_files
-        data["filtered"] = True
-        data["pattern"] = pattern
-    
-    return data
+    response = _make_request("POST", "/", params={"j": ""}, json=search_data)
+    return response.json()
 
 
 @mcp.tool(description="Get file metadata and tags (audio metadata like artist, album, title, etc.) for a specific file on the copyparty server. Requires the copyparty server to have metadata indexing enabled with -e2ts flag.")
@@ -313,6 +316,346 @@ def get_file_metadata(path: str) -> Dict[str, Any]:
         "error": "File not found or metadata not available",
         "note": "Ensure the copyparty server has metadata indexing enabled with -e2ts flag"
     }
+
+
+@mcp.tool(description="Create a temporary shareable URL for a file or folder on the copyparty server. The share can have an expiration time and custom permissions.")
+def create_share(path: str, expiration_minutes: Optional[int] = None, read_only: bool = True) -> Dict[str, Any]:
+    """
+    Create a temporary share URL for a file or folder.
+    
+    Args:
+        path: Path to the file or folder to share
+        expiration_minutes: Minutes until share expires (None for no expiration)
+        read_only: Whether the share is read-only (default: True)
+    
+    Returns:
+        Dictionary with share URL and information
+    """
+    share_data = {
+        "v": path,
+        "rd": 1 if read_only else 0
+    }
+    
+    if expiration_minutes:
+        share_data["life"] = expiration_minutes
+    
+    response = _make_request("POST", path, params={"share": ""}, json=share_data)
+    result = response.json()
+    
+    # Construct full share URL
+    if "url" in result:
+        share_url = urljoin(COPYPARTY_URL, result["url"])
+        result["full_url"] = share_url
+    
+    return result
+
+
+@mcp.tool(description="List all shared files and folders on the copyparty server that you have access to.")
+def list_shares() -> Dict[str, Any]:
+    """
+    List all your shared files and folders.
+    
+    Returns:
+        Dictionary with list of active shares
+    """
+    response = _make_request("GET", "/", params={"shares": ""})
+    
+    # Try to parse as JSON, fallback to text
+    try:
+        return response.json()
+    except (ValueError, json.JSONDecodeError):
+        return {
+            "success": True,
+            "shares": response.text
+        }
+
+
+@mcp.tool(description="Update the expiration time of an existing share on the copyparty server.")
+def update_share_expiration(path: str, expiration_minutes: int) -> Dict[str, Any]:
+    """
+    Update the expiration time of a shared file or folder.
+    
+    Args:
+        path: Path to the shared file or folder
+        expiration_minutes: New expiration time in minutes
+    
+    Returns:
+        Dictionary with update result
+    """
+    params = {"eshare": str(expiration_minutes)}
+    response = _make_request("POST", path, params=params)
+    
+    return {
+        "success": True,
+        "path": path,
+        "expiration_minutes": expiration_minutes,
+        "message": f"Share expiration updated to {expiration_minutes} minutes"
+    }
+
+
+@mcp.tool(description="Delete/stop sharing a file or folder on the copyparty server.")
+def delete_share(path: str) -> Dict[str, Any]:
+    """
+    Stop sharing a file or folder.
+    
+    Args:
+        path: Path to the shared file or folder
+    
+    Returns:
+        Dictionary with deletion result
+    """
+    params = {"eshare": "rm"}
+    response = _make_request("POST", path, params=params)
+    
+    return {
+        "success": True,
+        "path": path,
+        "message": f"Share removed for {path}"
+    }
+
+
+@mcp.tool(description="Download a folder and its contents as a tar archive from the copyparty server. Supports various compression formats.")
+def download_as_tar(path: str, compression: Optional[str] = None, level: int = 1) -> Dict[str, Any]:
+    """
+    Download folder contents as a tar archive.
+    
+    Args:
+        path: Path to the folder to download
+        compression: Compression type: None (no compression), 'gz' (gzip), 'xz' (xz)
+        level: Compression level 1-9 (default: 1)
+    
+    Returns:
+        Dictionary with download information and base64-encoded tar file
+    """
+    params = {}
+    if compression:
+        params["tar"] = f"{compression}:{level}"
+    else:
+        params["tar"] = ""
+    
+    response = _make_request("GET", path, params=params)
+    
+    return {
+        "success": True,
+        "path": path,
+        "compression": compression or "none",
+        "content": base64.b64encode(response.content).decode('utf-8'),
+        "encoding": "base64",
+        "size": len(response.content),
+        "content_type": response.headers.get("Content-Type", "application/x-tar")
+    }
+
+
+@mcp.tool(description="Download a folder and its contents as a zip archive from the copyparty server. Supports compatibility modes for older systems.")
+def download_as_zip(path: str, compatibility: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Download folder contents as a zip archive.
+    
+    Args:
+        path: Path to the folder to download
+        compatibility: Compatibility mode: None (modern), 'dos' (WinXP), 'crc' (MSDOS)
+    
+    Returns:
+        Dictionary with download information and base64-encoded zip file
+    """
+    params = {}
+    if compatibility:
+        params["zip"] = compatibility
+    else:
+        params["zip"] = ""
+    
+    response = _make_request("GET", path, params=params)
+    
+    return {
+        "success": True,
+        "path": path,
+        "compatibility": compatibility or "modern",
+        "content": base64.b64encode(response.content).decode('utf-8'),
+        "encoding": "base64",
+        "size": len(response.content),
+        "content_type": response.headers.get("Content-Type", "application/zip")
+    }
+
+
+@mcp.tool(description="Stream a growing file from the copyparty server, useful for log files or files being written. Supports starting from a specific position.")
+def tail_file(path: str, start_byte: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Continuously stream a growing file (like tail -f).
+    
+    Args:
+        path: Path to the file to tail
+        start_byte: Starting byte position (None for beginning, negative for bytes from end)
+    
+    Returns:
+        Dictionary with file content from the specified position
+    """
+    params = {}
+    if start_byte is not None:
+        params["tail"] = str(start_byte)
+    else:
+        params["tail"] = ""
+    
+    response = _make_request("GET", path, params=params)
+    
+    return {
+        "success": True,
+        "path": path,
+        "start_byte": start_byte,
+        "content": response.text,
+        "size": len(response.content),
+        "note": "This is a snapshot. For continuous streaming, call again or use WebSocket"
+    }
+
+
+@mcp.tool(description="Get a thumbnail for an image/video or transcode audio file on the copyparty server.")
+def get_thumbnail(path: str, format: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Get a thumbnail for media files or transcode audio.
+    
+    Args:
+        path: Path to the media file
+        format: Format for audio transcoding: 'opus' (128kbps opus), 'caf' (iOS format), or None for image/video thumbnail
+    
+    Returns:
+        Dictionary with thumbnail/transcoded content as base64
+    """
+    params = {}
+    if format:
+        params["th"] = format
+    else:
+        params["th"] = ""
+    
+    response = _make_request("GET", path, params=params)
+    
+    return {
+        "success": True,
+        "path": path,
+        "format": format or "thumbnail",
+        "content": base64.b64encode(response.content).decode('utf-8'),
+        "encoding": "base64",
+        "size": len(response.content),
+        "content_type": response.headers.get("Content-Type", "image/jpeg")
+    }
+
+
+@mcp.tool(description="Download a file as text with specific character encoding from the copyparty server.")
+def download_file_as_text(path: str, charset: str = "utf-8") -> Dict[str, Any]:
+    """
+    Get file content as text with specific character encoding.
+    
+    Args:
+        path: Path to the file
+        charset: Character encoding (default: utf-8, can be iso-8859-1, etc.)
+    
+    Returns:
+        Dictionary with file content as text
+    """
+    params = {}
+    if charset != "utf-8":
+        params["txt"] = charset
+    else:
+        params["txt"] = ""
+    
+    response = _make_request("GET", path, params=params)
+    
+    return {
+        "success": True,
+        "path": path,
+        "charset": charset,
+        "content": response.text,
+        "size": len(response.content)
+    }
+
+
+@mcp.tool(description="Render a markdown file as HTML or open media files in the viewer on the copyparty server.")
+def render_markdown(path: str) -> Dict[str, Any]:
+    """
+    Render a markdown file or open media in viewer.
+    
+    Args:
+        path: Path to the markdown file or media file
+    
+    Returns:
+        Dictionary with rendered content or viewer URL
+    """
+    params = {"v": ""}
+    response = _make_request("GET", path, params=params)
+    
+    return {
+        "success": True,
+        "path": path,
+        "content": response.text,
+        "content_type": response.headers.get("Content-Type", "text/html")
+    }
+
+
+@mcp.tool(description="Delete multiple files or folders at once on the copyparty server using a single request.")
+def delete_multiple_files(paths: List[str]) -> Dict[str, Any]:
+    """
+    Delete multiple files or folders in a single operation.
+    
+    Args:
+        paths: List of paths to delete
+    
+    Returns:
+        Dictionary with deletion results
+    """
+    response = _make_request("POST", "/", params={"delete": ""}, json=paths)
+    
+    return {
+        "success": True,
+        "deleted_paths": paths,
+        "count": len(paths),
+        "message": f"Successfully deleted {len(paths)} items"
+    }
+
+
+@mcp.tool(description="Show active downloads on the copyparty server (admin only). Useful for monitoring server activity.")
+def get_active_downloads() -> Dict[str, Any]:
+    """
+    Get list of active downloads (requires admin permissions).
+    
+    Returns:
+        Dictionary with active download information
+    """
+    response = _make_request("GET", "/", params={"dls": ""})
+    
+    try:
+        return response.json()
+    except (ValueError, json.JSONDecodeError):
+        return {
+            "success": True,
+            "downloads": response.text
+        }
+
+
+@mcp.tool(description="Show all recent uploads on the copyparty server (admin only), optionally filtered by path pattern.")
+def get_all_recent_uploads(filter_path: Optional[str] = None, as_json: bool = False) -> Dict[str, Any]:
+    """
+    Get all recent uploads from all users (requires admin permissions).
+    
+    Args:
+        filter_path: Optional path filter to only show uploads matching this pattern
+        as_json: Return as JSON format (default: False)
+    
+    Returns:
+        Dictionary with recent upload information
+    """
+    params = {"ru": ""}
+    if filter_path:
+        params["filter"] = filter_path
+    if as_json:
+        params["j"] = ""
+    
+    response = _make_request("GET", "/", params=params)
+    
+    try:
+        return response.json()
+    except (ValueError, json.JSONDecodeError):
+        return {
+            "success": True,
+            "uploads": response.text
+        }
 
 
 @mcp.tool(description="Get information about the copyparty MCP server configuration including the copyparty URL and connection status.")
