@@ -12,14 +12,17 @@ mcp = FastMCP("copyparty MCP Server")
 # Environment variable for the copyparty server URL
 # Users should set this to their copyparty server address
 COPYPARTY_URL = os.environ.get("COPYPARTY_URL", "http://localhost:3923")
-COPYPARTY_USERNAME = os.environ.get("COPYPARTY_USERNAME", "")
 COPYPARTY_PASSWORD = os.environ.get("COPYPARTY_PASSWORD", "")
 
 
 def _get_auth():
-    """Get authentication credentials if configured."""
-    if COPYPARTY_USERNAME and COPYPARTY_PASSWORD:
-        return (COPYPARTY_USERNAME, COPYPARTY_PASSWORD)
+    """Get authentication credentials if configured.
+    
+    Note: copyparty ignores usernames by default and only uses passwords.
+    We send an empty username with the password for basic auth.
+    """
+    if COPYPARTY_PASSWORD:
+        return ("", COPYPARTY_PASSWORD)
     return None
 
 
@@ -283,7 +286,7 @@ def get_server_info() -> Dict[str, Any]:
         "copyparty_url": COPYPARTY_URL,
         "copyparty_status": copyparty_status,
         "copyparty_accessible": copyparty_accessible,
-        "authentication_configured": bool(COPYPARTY_USERNAME and COPYPARTY_PASSWORD)
+        "authentication_configured": bool(COPYPARTY_PASSWORD)
     }
 
 
@@ -293,8 +296,8 @@ if __name__ == "__main__":
     
     print(f"Starting copyparty FastMCP server on {host}:{port}")
     print(f"Connecting to copyparty server at: {COPYPARTY_URL}")
-    if COPYPARTY_USERNAME:
-        print(f"Authentication: Configured for user '{COPYPARTY_USERNAME}'")
+    if COPYPARTY_PASSWORD:
+        print("Authentication: Password configured")
     else:
         print("Authentication: Not configured (using anonymous access)")
     

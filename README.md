@@ -44,15 +44,15 @@ Set environment variables to connect to your copyparty server:
 
 ```bash
 export COPYPARTY_URL="http://localhost:3923"  # Your copyparty server URL
-export COPYPARTY_USERNAME="your_username"     # Optional: for authentication
-export COPYPARTY_PASSWORD="your_password"     # Optional: for authentication
+export COPYPARTY_PASSWORD="your_password"     # Optional: password for authentication
 ```
+
+> **Note:** copyparty uses passwords only (no usernames by default). The username field is ignored unless the server has `--usernames` enabled.
 
 Or create a `.env` file (not committed to git):
 
 ```
 COPYPARTY_URL=http://localhost:3923
-COPYPARTY_USERNAME=your_username
 COPYPARTY_PASSWORD=your_password
 ```
 
@@ -79,8 +79,7 @@ Open http://localhost:3000 and connect to `http://localhost:8000/mcp` using "Str
 Configure these environment variables in your deployment:
 
 - `COPYPARTY_URL` (required) - URL of your copyparty server (e.g., `http://your-copyparty-server.com`)
-- `COPYPARTY_USERNAME` (optional) - Username for authentication
-- `COPYPARTY_PASSWORD` (optional) - Password for authentication
+- `COPYPARTY_PASSWORD` (optional) - Password for authentication (copyparty uses passwords only, no usernames)
 - `ENVIRONMENT` (optional) - Set to `production` for production deployments
 
 ### Option 1: One-Click Deploy to Render
