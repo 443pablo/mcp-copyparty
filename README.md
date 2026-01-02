@@ -8,7 +8,8 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server for interacting with [copy
 
 This MCP server provides the following tools for interacting with copyparty:
 
-- **list_files** - List files and folders in a directory
+- **list_files** - List files and folders in a directory (with optional metadata/tags)
+- **get_file_metadata** - Get file metadata and tags (audio metadata, etc.)
 - **download_file** - Download files from the server
 - **upload_file** - Upload files to the server
 - **create_directory** - Create new directories
@@ -114,6 +115,8 @@ If you run into persistent issues of poke not calling the right MCP (e.g. after 
 Once connected, you can ask your AI assistant to:
 
 - "List all files in the /music directory on copyparty"
+- "Get the metadata for the file /music/song.mp3 on copyparty"
+- "Show me all audio files with their tags in /music"
 - "Upload this text file to copyparty in the /documents folder"
 - "Download the file /data/report.pdf from copyparty"
 - "Create a directory called 'backups' in the root folder"
@@ -129,6 +132,18 @@ List files and folders in a directory.
 **Parameters:**
 - `path` (str, default: "/"): Directory path to list
 - `include_dotfiles` (bool, default: False): Include hidden files
+- `include_tags` (bool, default: False): Include file metadata/tags (requires copyparty server with `-e2ts` flag)
+
+### get_file_metadata
+Get file metadata and tags (audio metadata like artist, album, title, etc.).
+
+**Parameters:**
+- `path` (str): File path to get metadata for
+
+**Returns:**
+- Dictionary with file metadata including tags like artist, album, title, duration, and more
+
+**Note:** Requires the copyparty server to have metadata indexing enabled with the `-e2ts` flag. See [copyparty documentation](https://github.com/9001/copyparty#metadata-from-audio-files) for details.
 
 ### download_file
 Download a file from the server.
