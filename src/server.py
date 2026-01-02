@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 import os
-import json
-from typing import Optional, List, Dict, Any
+import sys
+import base64
+from typing import Optional, Dict, Any
 from fastmcp import FastMCP
 import requests
-from urllib.parse import urljoin, quote
+from urllib.parse import urljoin
 
 mcp = FastMCP("copyparty MCP Server")
 
@@ -75,7 +76,6 @@ def download_file(path: str, as_base64: bool = False) -> Dict[str, Any]:
     }
     
     if as_base64:
-        import base64
         result["content"] = base64.b64encode(response.content).decode('utf-8')
         result["encoding"] = "base64"
     else:
@@ -83,7 +83,6 @@ def download_file(path: str, as_base64: bool = False) -> Dict[str, Any]:
             result["content"] = response.text
             result["encoding"] = "text"
         except UnicodeDecodeError:
-            import base64
             result["content"] = base64.b64encode(response.content).decode('utf-8')
             result["encoding"] = "base64"
     
@@ -106,7 +105,6 @@ def upload_file(path: str, content: str, filename: str, is_base64: bool = False,
         Dictionary with upload result information
     """
     if is_base64:
-        import base64
         file_data = base64.b64decode(content)
     else:
         file_data = content.encode('utf-8')
@@ -281,7 +279,7 @@ def get_server_info() -> Dict[str, Any]:
         "mcp_server_name": "copyparty MCP Server",
         "version": "1.0.0",
         "environment": os.environ.get("ENVIRONMENT", "development"),
-        "python_version": os.sys.version.split()[0],
+        "python_version": sys.version.split()[0],
         "copyparty_url": COPYPARTY_URL,
         "copyparty_status": copyparty_status,
         "copyparty_accessible": copyparty_accessible,
