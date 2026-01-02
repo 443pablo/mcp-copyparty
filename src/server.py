@@ -363,7 +363,7 @@ def list_shares() -> Dict[str, Any]:
     # Try to parse as JSON, fallback to text
     try:
         return response.json()
-    except:
+    except (ValueError, requests.exceptions.JSONDecodeError):
         return {
             "success": True,
             "shares": response.text
@@ -622,7 +622,7 @@ def get_active_downloads() -> Dict[str, Any]:
     
     try:
         return response.json()
-    except:
+    except (ValueError, requests.exceptions.JSONDecodeError):
         return {
             "success": True,
             "downloads": response.text
@@ -651,7 +651,7 @@ def get_all_recent_uploads(filter_path: Optional[str] = None, as_json: bool = Fa
     
     try:
         return response.json()
-    except:
+    except (ValueError, requests.exceptions.JSONDecodeError):
         return {
             "success": True,
             "uploads": response.text
