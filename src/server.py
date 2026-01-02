@@ -290,6 +290,7 @@ def get_file_metadata(path: str) -> Dict[str, Any]:
         for file_info in data["files"]:
             if file_info.get("name") == filename:
                 result = {
+                    "success": True,
                     "path": path,
                     "name": filename,
                     "size": file_info.get("sz"),
@@ -307,6 +308,7 @@ def get_file_metadata(path: str) -> Dict[str, Any]:
     
     # If file not found or no metadata available
     return {
+        "success": False,
         "path": path,
         "error": "File not found or metadata not available",
         "note": "Ensure the copyparty server has metadata indexing enabled with -e2ts flag"
