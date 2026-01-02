@@ -8,16 +8,40 @@ A [FastMCP](https://github.com/jlowin/fastmcp) server for interacting with [copy
 
 This MCP server provides the following tools for interacting with copyparty:
 
+### File Management
 - **list_files** - List files and folders in a directory (with optional metadata/tags)
 - **get_file_metadata** - Get file metadata and tags (audio metadata, etc.)
 - **download_file** - Download files from the server
 - **upload_file** - Upload files to the server
 - **create_directory** - Create new directories
 - **delete_file** - Delete files or directories
+- **delete_multiple_files** - Delete multiple files at once
 - **move_file** - Move or rename files/directories
 - **copy_file** - Copy files or directories
-- **search_files** - Search for files by pattern
-- **get_recent_uploads** - View recent uploads
+
+### Search & Discovery
+- **search_files** - Server-wide search with advanced query syntax
+- **get_recent_uploads** - View recent uploads from your IP
+- **get_all_recent_uploads** - View all recent uploads (admin only)
+
+### File Sharing
+- **create_share** - Create temporary shareable URLs for files/folders
+- **list_shares** - List all your shared files/folders
+- **update_share_expiration** - Update share expiration time
+- **delete_share** - Stop sharing a file/folder
+
+### Archive Downloads
+- **download_as_tar** - Download folders as tar/tar.gz/tar.xz archives
+- **download_as_zip** - Download folders as zip archives
+
+### Advanced File Operations
+- **tail_file** - Stream growing files (logs, etc.)
+- **get_thumbnail** - Get thumbnails or transcode audio
+- **download_file_as_text** - Download with specific charset encoding
+- **render_markdown** - Render markdown files or open media viewer
+
+### Monitoring
+- **get_active_downloads** - Show active downloads (admin only)
 - **get_server_info** - Get server connection information
 
 ## Prerequisites
@@ -120,13 +144,19 @@ Once connected, you can ask your AI assistant to:
 - "Upload this text file to copyparty in the /documents folder"
 - "Download the file /data/report.pdf from copyparty"
 - "Create a directory called 'backups' in the root folder"
-- "Search for all .mp3 files in /music"
+- "Search for all .mp3 files containing 'blues' in the server"
 - "Move /old/file.txt to /new/file.txt"
 - "Show me recent uploads to the server"
+- "Create a shareable link for /documents/report.pdf that expires in 60 minutes"
+- "Download the /music folder as a tar.gz archive"
+- "Get a thumbnail for /photos/sunset.jpg"
+- "Show me the last 100 lines of /logs/server.log"
 
 ## Tool Reference
 
-### list_files
+### File Management Tools
+
+#### list_files
 List files and folders in a directory.
 
 **Parameters:**
@@ -134,7 +164,7 @@ List files and folders in a directory.
 - `include_dotfiles` (bool, default: False): Include hidden files
 - `include_tags` (bool, default: False): Include file metadata/tags (requires copyparty server with `-e2ts` flag)
 
-### get_file_metadata
+#### get_file_metadata
 Get file metadata and tags (audio metadata like artist, album, title, etc.).
 
 **Parameters:**
@@ -145,14 +175,14 @@ Get file metadata and tags (audio metadata like artist, album, title, etc.).
 
 **Note:** Requires the copyparty server to have metadata indexing enabled with the `-e2ts` flag. See [copyparty documentation](https://github.com/9001/copyparty#metadata-from-audio-files) for details.
 
-### download_file
+#### download_file
 Download a file from the server.
 
 **Parameters:**
 - `path` (str): File path to download
 - `as_base64` (bool, default: False): Return as base64 for binary files
 
-### upload_file
+#### upload_file
 Upload a file to the server.
 
 **Parameters:**
@@ -162,47 +192,150 @@ Upload a file to the server.
 - `is_base64` (bool, default: False): Whether content is base64-encoded
 - `replace` (bool, default: False): Replace if file exists
 
-### create_directory
+#### create_directory
 Create a new directory.
 
 **Parameters:**
 - `path` (str): Parent directory path
 - `name` (str): Name of new directory
 
-### delete_file
+#### delete_file
 Delete a file or directory recursively.
 
 **Parameters:**
 - `path` (str): Path to delete
 
-### move_file
+#### delete_multiple_files
+Delete multiple files or folders at once.
+
+**Parameters:**
+- `paths` (List[str]): List of paths to delete
+
+#### move_file
 Move or rename a file/directory.
 
 **Parameters:**
 - `source_path` (str): Current path
 - `destination_path` (str): New path
 
-### copy_file
+#### copy_file
 Copy a file or directory.
 
 **Parameters:**
 - `source_path` (str): Source path
 - `destination_path` (str): Destination path
 
-### search_files
-Search for files by pattern.
+### Search & Discovery Tools
+
+#### search_files
+Server-wide search with advanced query syntax.
 
 **Parameters:**
-- `path` (str, default: "/"): Directory to search
-- `pattern` (str, optional): Pattern to match
+- `query` (str): Search query with operators:
+  - Simple text: searches filenames and content
+  - `"quoted text"`: exact phrase match
+  - `-word`: exclude files containing word
+  - `tag:value`: search by metadata tag
+  - `ext:mp3`: search by file extension
+  - `size>1M`: files larger than 1MB
+  - `date>2023-01-01`: files modified after date
+- `path` (str, default: "/"): Optional path to limit search scope
 
-### get_recent_uploads
-View recent uploads.
+#### get_recent_uploads
+View recent uploads from your IP.
 
 **Parameters:**
 - `filter_path` (str, optional): Filter by path pattern
 
-### get_server_info
+#### get_all_recent_uploads
+View all recent uploads (admin only).
+
+**Parameters:**
+- `filter_path` (str, optional): Filter by path pattern
+- `as_json` (bool, default: False): Return as JSON format
+
+### File Sharing Tools
+
+#### create_share
+Create a temporary shareable URL for a file or folder.
+
+**Parameters:**
+- `path` (str): Path to share
+- `expiration_minutes` (int, optional): Minutes until expiration
+- `read_only` (bool, default: True): Whether share is read-only
+
+#### list_shares
+List all your shared files and folders.
+
+**No parameters**
+
+#### update_share_expiration
+Update the expiration time of an existing share.
+
+**Parameters:**
+- `path` (str): Path to the shared file/folder
+- `expiration_minutes` (int): New expiration time in minutes
+
+#### delete_share
+Stop sharing a file or folder.
+
+**Parameters:**
+- `path` (str): Path to stop sharing
+
+### Archive Download Tools
+
+#### download_as_tar
+Download folder contents as a tar archive.
+
+**Parameters:**
+- `path` (str): Path to the folder
+- `compression` (str, optional): Compression type: None, 'gz' (gzip), 'xz'
+- `level` (int, default: 1): Compression level 1-9
+
+#### download_as_zip
+Download folder contents as a zip archive.
+
+**Parameters:**
+- `path` (str): Path to the folder
+- `compatibility` (str, optional): Compatibility mode: None, 'dos' (WinXP), 'crc' (MSDOS)
+
+### Advanced File Operations
+
+#### tail_file
+Stream a growing file (like tail -f).
+
+**Parameters:**
+- `path` (str): Path to the file
+- `start_byte` (int, optional): Starting byte position (negative for bytes from end)
+
+#### get_thumbnail
+Get thumbnail for media or transcode audio.
+
+**Parameters:**
+- `path` (str): Path to the media file
+- `format` (str, optional): For audio: 'opus' (128kbps), 'caf' (iOS), or None for image/video thumbnail
+
+#### download_file_as_text
+Download file with specific character encoding.
+
+**Parameters:**
+- `path` (str): Path to the file
+- `charset` (str, default: "utf-8"): Character encoding (e.g., 'iso-8859-1')
+
+#### render_markdown
+Render markdown file or open media viewer.
+
+**Parameters:**
+- `path` (str): Path to markdown or media file
+
+### Monitoring Tools
+
+#### get_active_downloads
+Show active downloads (admin only).
+
+**No parameters**
+
+#### get_server_info
 Get server configuration and status.
 
 **No parameters**
