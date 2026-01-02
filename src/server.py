@@ -38,21 +38,24 @@ def _make_request(method: str, path: str, **kwargs) -> requests.Response:
     return response
 
 
-@mcp.tool(description="List files and folders in a directory on the copyparty server. Returns JSON with file information including names, sizes, and timestamps.")
-def list_files(path: str = "/", include_dotfiles: bool = False) -> Dict[str, Any]:
+@mcp.tool(description="List files and folders in a directory on the copyparty server. Returns JSON with file information including names, sizes, timestamps, and metadata/tags if available.")
+def list_files(path: str = "/", include_dotfiles: bool = False, include_tags: bool = False) -> Dict[str, Any]:
     """
     List files and folders at the specified path.
     
     Args:
         path: Directory path to list (default: "/")
         include_dotfiles: Include hidden files starting with dot (default: False)
+        include_tags: Include file metadata/tags in the response (default: False)
     
     Returns:
-        Dictionary containing file and folder information
+        Dictionary containing file and folder information, with tags if requested
     """
     params = {"ls": ""}
     if include_dotfiles:
         params["dots"] = ""
+    if include_tags:
+        params["tags"] = ""
     
     response = _make_request("GET", path, params=params)
     return response.json()
@@ -259,6 +262,57 @@ def search_files(path: str = "/", pattern: Optional[str] = None) -> Dict[str, An
         data["pattern"] = pattern
     
     return data
+
+
+@mcp.tool(description="Get file metadata and tags (audio metadata like artist, album, title, etc.) for a specific file on the copyparty server. Requires the copyparty server to have metadata indexing enabled with -e2ts flag.")
+def get_file_metadata(path: str) -> Dict[str, Any]:
+    """
+    Get metadata/tags for a file (especially useful for audio files with ID3 tags, etc.).
+    
+    Args:
+        path: File path to get metadata for
+    
+    Returns:
+        Dictionary with file metadata including tags like artist, album, title, duration, etc.
+    """
+    # Request file listing with metadata by adding ?tags parameter
+    # The parent directory is needed to get the file info from the listing
+    dir_path = os.path.dirname(path) or "/"
+    filename = os.path.basename(path)
+    
+    # Get directory listing with tags
+    params = {"ls": "", "tags": ""}
+    response = _make_request("GET", dir_path, params=params)
+    data = response.json()
+    
+    # Find the specific file in the listing
+    if "files" in data:
+        for file_info in data["files"]:
+            if file_info.get("name") == filename:
+                result = {
+                    "success": True,
+                    "path": path,
+                    "name": filename,
+                    "size": file_info.get("sz"),
+                    "modified": file_info.get("ts"),
+                }
+                
+                # Include all tags if present
+                if "tags" in file_info:
+                    result["tags"] = file_info["tags"]
+                
+                # Also include raw file info for any additional metadata
+                result["raw_metadata"] = file_info
+                
+                return result
+    
+    # If file not found or no metadata available
+    return {
+        "success": False,
+        "path": path,
+        "error": "File not found or metadata not available",
+        "note": "Ensure the copyparty server has metadata indexing enabled with -e2ts flag"
+    }
 
 
 @mcp.tool(description="Get information about the copyparty MCP server configuration including the copyparty URL and connection status.")
